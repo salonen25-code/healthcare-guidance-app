@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Healthcare Guidance App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      margin-top: 10px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px 16px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .section {
+      margin-top: 20px;
+      padding: 15px;
+      border-left: 4px solid #4a90e2;
+      background: #f9f9f9;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    .loading {
+      margin-top: 20px;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Healthcare Guidance</h1>
+
+  <p>
+    Enter your health concern below.  
+    Guidance is informational and integrates multiple healthcare perspectives.
+  </p>
+
+  <textarea id="concern" placeholder="Example: I feel anxious, low energy, and mentally foggy."></textarea>
+  <br />
+  <button onclick="getGuidance()">Get Guidance</button>
+
+  <div id="status" class="loading"></div>
+  <div id="results"></div>
+
+  <script>
+    async function getGuidance() {
+  const concern = document.getElementById("concern").value;
+  const statusDiv = document.getElementById("status");
+  const resultsDiv = document.getElementById("results");
+
+  resultsDiv.innerHTML = "";
+  statusDiv.textContent = "Loading guidance...";
+
+  try {
+    const response = await fetch("/api/guidance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ concern })
+    });
+
+    const data = await response.json();
+    statusDiv.textContent = "";
+
+    // If guidance is an array of sections
+    if (Array.isArray(data.guidance)) {
+      data.guidance.forEach(section => {
+        const div = document.createElement("div");
+        div.className = "section";
+
+        const title = document.createElement("h2");
+        title.textContent = section.section;
+
+        const content = document.createElement("p");
+        content.textContent = section.text;
+
+        div.appendChild(title);
+        div.appendChild(content);
+        resultsDiv.appendChild(div);
+      });
+    } 
+    // If guidance is an object
+    else if (typeof data.guidance === "object") {
+      for (const sectionName in data.guidance) {
+        const div = document.createElement("div");
+        div.className = "section";
+
+        const title = document.createElement("h2");
+        title.textContent = sectionName;
+
+        const content = document.createElement("p");
+        content.textContent = data.guidance[sectionName];
+
+        div.appendChild(title);
+        div.appendChild(content);
+        resultsDiv.appendChild(div);
+      }
+    }
+
+  } catch (error) {
+    statusDiv.textContent = "Error loading guidance.";
+    console.error(error);
+  }
+}
+
+  </script>
+
+</body>
+</html>
+
+
+
