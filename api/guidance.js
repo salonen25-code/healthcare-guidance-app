@@ -1,11 +1,12 @@
 import OpenAI from "openai";
 
-// Initialize OpenAI with your API key from Vercel environment variables
+// Initialize OpenAI using Vercel environment variable
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 export default async function handler(req, res) {
+  // Only allow POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -13,15 +14,18 @@ export default async function handler(req, res) {
   try {
     const { concern } = req.body;
 
-    if (!concern) {
+    if (!concern || typeof concern !== "string") {
       return res.status(400).json({ error: "Patient concern is required." });
     }
 
     const prompt = `
 You are a healthcare education assistant.
-A user describes a health concern. Respond with EDUCATIONAL guidance only. Do NOT diagnose or prescribe.
 
-Return a VALID JSON object for EACH perspective with this structure:
+A user describes a health concern. Respond with EDUCATIONAL guidance only.
+Do NOT diagnose or prescribe.
+
+Return a VALID JSON object using this structure:
+
 {
   "Perspective Name": {
     "overview": "Text overview of this perspective.",
@@ -31,30 +35,22 @@ Return a VALID JSON object for EACH perspective with this structure:
       "practices": [{"name":"", "notes":"", "evidence_score":0, "safety_notes":""}],
       "other_considerations": [{"name":"", "notes":"", "evidence_score":0, "safety_notes":""}]
     }
-  }
+  },
+  "disclaimer": "This information is educational and not medical advice."
 }
 
 Include these perspectives:
 - Conventional (Western) Medicine
 - Integrative Medicine
-- Functional Medicine
-- Traditional Chinese Medicine
-- Ayurvedic Medicine
 - Lifestyle Medicine
 - Behavioral / Mind-Body Approaches
-- Biohacking / Health Optimization
-- Homeopathy
-- Indigenous / Cultural Practices
 
-Instructions:
-- Include more specific guidance, including both common and rarer treatments with literature support.
-- Give evidence_score from 0-100 reflecting positive scientific support.
-- Include safety_notes for any cautions or contraindications.
-- For each supplement, food, or practice, provide brief notes, examples, and how it is applied (e.g., dosage, preparation, method).
-- Use cautious, educational language: "commonly discussed", "traditionally used", "some research suggests", "may be discussed with a healthcare professional".
-
-Add a field at the end:
-"disclaimer": "This information is educational and not medical advice."
+Rules:
+- Respond with JSON ONLY.
+- No markdown.
+- No explanations outside JSON.
+- Evidence scores must be between 0–100.
+- Use cautious educational language.
 
 Patient concern:
 "${concern}"
@@ -62,29 +58,58 @@ Patient concern:
 
     const response = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content: "You provide structured, multi-perspective healthcare guidance with specificity, evidence scores, and safety notes.",
+          content:
+            "You are a healthcare education assistant that ALWAYS returns valid JSON only.",
         },
         { role: "user", content: prompt },
       ],
-      temperature: 0.5,
+      temperature: 0.4,
     });
 
     const content = response.choices[0].message.content;
 
     let parsedGuidance;
+
     try {
       parsedGuidance = JSON.parse(content);
     } catch (err) {
-      console.error("Error parsing JSON from OpenAI:", content);
-      return res.status(500).json({ error: "Failed to parse guidance JSON." });
+      console.error("JSON parse failed. Raw response:", content);
+
+      // Guaranteed fallback so app is NEVER empty
+      parsedGuidance = {
+        "General Guidance": {
+          overview:
+            "Your concern was received, but the response could not be structured perfectly. Below is general educational guidance that may still be helpful.",
+          specific_options: {
+            practices: [
+              {
+                name: "Consult a qualified healthcare professional",
+                notes:
+                  "A licensed professional can help evaluate symptoms and provide personalized guidance.",
+                evidence_score: 90,
+                safety_notes:
+                  "Seek urgent care if symptoms are severe, worsening, or involve safety concerns.",
+              },
+            ],
+          },
+        },
+        disclaimer: "This information is educational and not medical advice.",
+      };
     }
 
-    res.status(200).json({ concern, guidance: parsedGuidance });
+    return res.status(200).json({
+      concern,
+      guidance: parsedGuidance,
+    });
   } catch (error) {
-    console.error("Guidance error:", error);
-    res.status(500).json({ error: "Failed to generate guidance." });
+    console.error("Guidance API error:", error);
+    return res.status(500).json({
+      error: "Failed to generate guidance.",
+    });
   }
 }
+
