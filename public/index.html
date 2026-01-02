@@ -9,43 +9,77 @@
       max-width: 800px;
       margin: 40px auto;
       padding: 0 20px;
+      background-color: #f3f6f8;
+      color: #333;
     }
+
+    h1 {
+      text-align: center;
+      color: #2a7ae2;
+    }
+
     textarea {
       width: 100%;
       height: 100px;
       margin-top: 10px;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      resize: vertical;
     }
+
     button {
       margin-top: 10px;
       padding: 10px 16px;
       font-size: 16px;
       cursor: pointer;
+      background-color: #2a7ae2;
+      color: white;
+      border: none;
+      border-radius: 6px;
     }
+
+    button:hover {
+      background-color: #1e5bb8;
+    }
+
     .section {
       margin-top: 20px;
       padding: 15px;
-      border-left: 4px solid #4a90e2;
-      background: #f9f9f9;
+      border-left: 5px solid #2a7ae2;
+      background: #ffffff;
+      border-radius: 6px;
+      box-shadow: 0px 2px 6px rgba(0,0,0,0.05);
     }
+
     h2 {
       margin-top: 0;
+      color: #1e5bb8;
     }
+
     h3 {
       margin-bottom: 5px;
       margin-top: 10px;
+      color: #2a7ae2;
     }
+
     ul {
       margin-top: 0;
       padding-left: 20px;
     }
+
     .item-details {
       font-size: 0.9em;
       color: #555;
       margin-left: 10px;
     }
+
     .loading {
       margin-top: 20px;
       font-style: italic;
+      font-weight: bold;
+      color: #d35400;
     }
   </style>
 </head>
@@ -54,7 +88,7 @@
   <h1>Healthcare Guidance</h1>
 
   <p>
-    Enter your health concern below.  
+    Enter your health concern below.<br/>
     Guidance is informational and integrates multiple healthcare perspectives.
   </p>
 
@@ -67,18 +101,23 @@
 
   <script>
     async function getGuidance() {
-      const concern = document.getElementById("concern").value;
+      const concern = document.getElementById("concern").value.trim();
       const statusDiv = document.getElementById("status");
       const resultsDiv = document.getElementById("results");
 
       resultsDiv.innerHTML = "";
+      if (!concern) {
+        statusDiv.textContent = "Please enter a concern.";
+        return;
+      }
+
       statusDiv.textContent = "Loading guidance...";
 
       try {
         const response = await fetch("/api/guidance", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ concern })
+          body: JSON.stringify({ concern }),
         });
 
         const data = await response.json();
@@ -86,9 +125,21 @@
 
         const guidance = data.guidance;
 
+        // Clear previous
+        resultsDiv.innerHTML = "";
+
+        // If fallback text (OpenAI response could not be parsed)
+        if (guidance.fallback) {
+          const div = document.createElement("div");
+          div.className = "section";
+          div.textContent = guidance.fallback;
+          resultsDiv.appendChild(div);
+          return;
+        }
+
+        // Loop over perspectives
         for (const perspective in guidance) {
           const section = guidance[perspective];
-
           const div = document.createElement("div");
           div.className = "section";
 
@@ -98,57 +149,54 @@
 
           // Overview
           if (section.overview) {
-            const overview = document.createElement("p");
-            overview.textContent = section.overview;
-            div.appendChild(overview);
+            const p = document.createElement("p");
+            p.textContent = section.overview;
+            div.appendChild(p);
           }
 
           // Specific options
           if (section.specific_options) {
-            const opts = section.specific_options;
+            for (const key in section.specific_options) {
+              const items = section.specific_options[key];
+              if (!items || items.length === 0) continue;
 
-            for (const key in opts) {
-              if (opts[key] && opts[key].length > 0) {
-                const listTitle = document.createElement("h3");
-                listTitle.textContent = key.charAt(0).toUpperCase() + key.slice(1);
-                div.appendChild(listTitle);
+              const h3 = document.createElement("h3");
+              h3.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+              div.appendChild(h3);
 
-                const list = document.createElement("ul");
+              const ul = document.createElement("ul");
+              items.forEach(item => {
+                const li = document.createElement("li");
+                li.textContent = item.name;
 
-                opts[key].forEach(item => {
-                  const li = document.createElement("li");
-                  li.textContent = item.name;
-
-                  // Add notes, evidence score, safety notes
-                  const details = document.createElement("div");
-                  details.className = "item-details";
-                  details.innerHTML = `
-                    ${item.notes ? "Notes: " + item.notes + "<br/>" : ""}
-                    ${item.evidence_score !== undefined ? "Evidence Score: " + item.evidence_score + "<br/>" : ""}
-                    ${item.safety_notes ? "Safety Notes: " + item.safety_notes : ""}
-                  `;
-
-                  li.appendChild(details);
-                  list.appendChild(li);
-                });
-
-                div.appendChild(list);
-              }
+                const details = document.createElement("div");
+                details.className = "item-details";
+                details.innerHTML = `
+                  ${item.notes ? "Notes: " + item.notes + "<br/>" : ""}
+                  Evidence Score: ${item.evidence_score}<br/>
+                  ${item.safety_notes ? "Safety Notes: " + item.safety_notes : ""}
+                `;
+                li.appendChild(details);
+                ul.appendChild(li);
+              });
+              div.appendChild(ul);
             }
           }
 
           resultsDiv.appendChild(div);
         }
 
-      } catch (error) {
+      } catch (err) {
+        console.error(err);
         statusDiv.textContent = "Error loading guidance.";
-        console.error(error);
       }
     }
   </script>
 
 </body>
 </html>
+
+
 
 
 
